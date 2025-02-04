@@ -12,7 +12,7 @@
                         alt="image women"
                     >
                     <Link
-                        href=""
+                        href="/women"
                         class="absolute font-semibold left-5 top-[60%] translate-y-1/2 border border-white text-white px-6 py-1.5 uppercase text-sm tracking-wide hover:bg-white hover:text-black transition"
                     >
                         Dames
@@ -27,7 +27,7 @@
                         alt="image men"
                     >
                     <Link
-                        href=""
+                        href="/men"
                         class="absolute font-semibold left-5 top-[60%] translate-y-1/2 border border-white text-white px-6 py-1.5 uppercase text-sm tracking-wide hover:bg-white hover:text-black transition"
                     >
                         Heren

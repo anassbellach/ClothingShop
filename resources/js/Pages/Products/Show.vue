@@ -10,7 +10,7 @@
 
         <!-- Right: Product Details -->
         <div class="w-1/2 flex flex-col items-start text-left mt-32">
-            <div class="w-3/4 mx-auto">
+            <div class="w-3/5 mx-auto">
                 <!-- Product Title & Wishlist -->
                 <div class="flex justify-between items-center w-full">
                     <h1 class="font-supreme text-xl text-gray-600 font-bold uppercase">{{ product.name }}</h1>

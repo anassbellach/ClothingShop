@@ -19,17 +19,6 @@ return new class extends Migration
             $table->unsignedBigInteger('updated_at');
             $table->unsignedBigInteger('deleted_at')->nullable();
         });
-
-        Schema::create('cart_items', function (Blueprint $table) {
-            $table->id();
-            $table->foreignId('cart_id')->constrained()->onDelete('cascade');
-            $table->foreignId('product_id')->constrained()->onDelete('cascade');
-            $table->string('size')->nullable();
-            $table->integer('quantity')->default(1);
-            $table->unsignedBigInteger('created_at');
-            $table->unsignedBigInteger('updated_at');
-            $table->unsignedBigInteger('deleted_at')->nullable();
-        });
     }
 
     /**

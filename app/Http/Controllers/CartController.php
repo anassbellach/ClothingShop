@@ -4,9 +4,12 @@ namespace App\Http\Controllers;
 
 use App\Models\Cart;
 use App\Models\CartItem;
+use App\Models\Discount;
 use App\Models\Product;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Inertia\Inertia;
+
 
 class CartController extends Controller
 {
@@ -15,15 +18,16 @@ class CartController extends Controller
      */
     public function index()
     {
-        $cart = Cart::with('items.product')->firstOrCreate([
-            'user_id' => Auth::id(), // For logged-in users
-            'session_id' => session()->getId(), // For guest users
+        $cart = Cart::with('items.product.images')->firstOrCreate([
+            'user_id' => Auth::id(),
+            'session_id' => session()->getId(),
         ]);
 
         return inertia('Cart/Index', [
             'cart' => $cart,
         ]);
     }
+
 
     /**
      * Store a new item in the cart (Add to cart).
@@ -93,9 +97,7 @@ class CartController extends Controller
         $cartItem = CartItem::findOrFail($cartItemId);
         $cartItem->delete();
 
-        return response()->json([
-            'message' => 'Item removed from cart.',
-        ]);
+        return redirect()->back()->with('success', 'Item removed from cart.');
     }
 
     /**
@@ -115,4 +117,5 @@ class CartController extends Controller
             'message' => 'Cart cleared successfully.',
         ]);
     }
+
 }

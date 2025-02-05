@@ -9,14 +9,17 @@ return new class extends Migration
     /**
      * Run the migrations.
      */
-    public function up()
+    public function up(): void
     {
-        Schema::create('order_items', function (Blueprint $table) {
+        Schema::create('discounts', function (Blueprint $table) {
             $table->id();
-            $table->foreignId('order_id')->constrained('orders')->onDelete('cascade');
-            $table->foreignId('product_id')->constrained('products')->onDelete('cascade');
-            $table->integer('quantity');
-            $table->decimal('price', 8, 2);
+            $table->string('code')->unique();
+            $table->enum('type', ['percentage', 'fixed']);
+            $table->decimal('value', 8, 2);
+            $table->integer('max_uses')->nullable();
+            $table->integer('used_count')->default(0);
+            $table->bigInteger('starts_at')->nullable();
+            $table->bigInteger('expires_at')->nullable();
             $table->unsignedBigInteger('created_at');
             $table->unsignedBigInteger('updated_at');
             $table->unsignedBigInteger('deleted_at')->nullable();
@@ -28,6 +31,6 @@ return new class extends Migration
      */
     public function down(): void
     {
-        Schema::dropIfExists('order_items');
+        Schema::dropIfExists('discounts');
     }
 };

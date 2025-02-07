@@ -11,13 +11,14 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware) {
+        // Add custom CORS Middleware for web requests
         $middleware->web(append: [
             \App\Http\Middleware\HandleInertiaRequests::class,
             \Illuminate\Http\Middleware\AddLinkHeadersForPreloadedAssets::class,
+            \App\Http\Middleware\CorsMiddleware::class,  // Add CORS middleware here
         ]);
-
-        //
     })
     ->withExceptions(function (Exceptions $exceptions) {
-        //
-    })->create();
+        // Exception handling if necessary
+    })
+    ->create();

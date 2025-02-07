@@ -1,7 +1,13 @@
 <template>
     <div class="max-w-4xl mx-auto p-6">
         <h1 class="text-2xl font-bold mb-4">Guest Checkout</h1>
-        <form @submit.prevent="submitGuestCheckout">
+
+        <!-- Display error if it exists -->
+        <div v-if="error" class="text-red-500 mb-4">
+            {{ error }}
+        </div>
+
+        <form @submit.prevent="submitCheckout">
             <div class="mb-4">
                 <label class="block">Email Address</label>
                 <input v-model="form.email" type="email" required class="w-full border p-2" />
@@ -20,33 +26,44 @@
 </template>
 
 <script setup>
-import { useForm } from "@inertiajs/vue3"; // Import useForm from Inertia
-import { ref } from "vue";
+import { reactive, ref } from "vue";
+import { usePage } from "@inertiajs/vue3";
+import axios from "axios";
 
-// Initialize form with Inertia's useForm hook
-const form = useForm({
-    email: '',
-    shipping_address: '',
-    billing_address: '',
+const form = reactive({
+    email: "",
+    shipping_address: "",
+    billing_address: "",
 });
 
-// Submit function to send the data to the backend
-const submitGuestCheckout = () => {
-    form.post(route('checkout.store'), {
-        onFinish: () => {
-            // Handle the completion of the post request
-            if (form.errors) {
-                console.error("Form errors", form.errors);
-            } else {
-                window.location.href = form.data.checkout_url; // You can replace this with the actual checkout URL
-            }
-        },
-    });
-};
-</script>
+const error = ref("");
 
-<script>
-export default {
-    layout: null,
+const submitCheckout = async () => {
+    try {
+        const response = await axios.post("/checkout", form);
+        // Check if the response is HTML or JSON
+        if (response.headers['content-type'].includes('html')) {
+            console.error('Received HTML response instead of JSON:', response.data);
+            return;
+        }
+
+        // Process the JSON response
+        if (response.data.error) {
+            error.value = response.data.error;
+            return;
+        }
+
+        console.log(response.data);
+
+        if (response.data.checkout_url) {
+            window.location.href = response.data.checkout_url;
+        } else {
+            error.value = "Something went wrong. Please try again.";
+        }
+    } catch (error) {
+        error.value = "Error processing checkout. Please try again.";
+        console.error(error);
+    }
+
 };
 </script>

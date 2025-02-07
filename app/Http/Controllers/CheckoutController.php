@@ -29,21 +29,27 @@ class CheckoutController extends Controller
         $cartItems = CartItem::where('cart_id', $cart->id)->get();
 
         if ($cartItems->isEmpty()) {
-            return response()->json(['error' => 'Your cart is empty.'], 400);
+            return Inertia::render('Checkout/GuestCheckout', [
+                'error' => 'Your cart is empty.',
+            ]);
         }
 
         DB::beginTransaction();
         try {
+            // Calculate the total amount
+            $totalAmount = $cartItems->sum(fn($item) => $item->product->price * $item->quantity);
+
             // Create an order
             $order = Order::create([
                 'user_id' => $userId,
-                'total_amount' => $cartItems->sum(fn($item) => $item->product->price * $item->quantity),
+                'total_amount' => $totalAmount,
                 'status' => 'pending',
                 'payment_method' => 'stripe',
                 'payment_status' => 'pending',
                 'shipping_address' => $request->shipping_address,
                 'billing_address' => $request->billing_address,
             ]);
+
 
             // Create order items
             foreach ($cartItems as $cartItem) {
@@ -84,15 +90,32 @@ class CheckoutController extends Controller
                 'success_url' => route('checkout.success', ['session_id' => '{CHECKOUT_SESSION_ID}']),
                 'cancel_url' => route('checkout.cancel'),
             ]);
+//            echo '<pre>';
+//            var_dump($session);
+//            die();
 
             DB::commit();
 
-            // Redirect the user to Stripe Checkout page
-            return redirect($session->url); // Redirect to Stripe Checkout
+            return response()->json([
+                'checkout_url' => $session->url,
+            ]);
+
 
         } catch (\Exception $e) {
             DB::rollBack();
-            return response()->json(['error' => 'Something went wrong.'], 500);
+
+            // Debugging the exception
+//            echo '<pre>';
+//            var_dump($e->getMessage());
+//            die();
+
+            // Log the error for better debugging
+            \Log::error('Checkout Error: ' . $e->getMessage());
+
+            // Return an Inertia response with the error message
+            return Inertia::render('Checkout/GuestCheckout', [
+                'error' => 'Something went wrong during the checkout process. Please try again.',
+            ]);
         }
     }
 

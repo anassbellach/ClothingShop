@@ -26,6 +26,9 @@ class CheckoutController extends Controller
 
         // Retrieve the user's cart or guest cart using session ID
         $cart = Cart::where('user_id', $userId)->orWhere('session_id', session()->getId())->first();
+
+        dd($cart);
+
         $cartItems = CartItem::where('cart_id', $cart->id)->get();
 
         if ($cartItems->isEmpty()) {

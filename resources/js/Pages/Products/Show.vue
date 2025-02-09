@@ -77,7 +77,7 @@ const props = defineProps({
     category: Object,
 });
 
-const sizes = ["S", "M", "L", "XL"]; // Example sizes
+const sizes = ["S", "M", "L", "XL", "XXL"]; // Example sizes
 const selectedSize = ref("");
 const dropdownOpen = ref(false);
 

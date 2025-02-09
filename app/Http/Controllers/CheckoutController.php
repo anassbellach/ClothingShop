@@ -15,6 +15,18 @@ use Inertia\Inertia;
 
 class CheckoutController extends Controller
 {
+
+    public function startCheckout(Request $request)
+    {
+        // If the user is authenticated, you can redirect to the authenticated checkout page
+        if (Auth::check()) {
+            return redirect()->route('checkout.index');  // Ensure the route 'checkout.index' exists
+        }
+
+        // Redirect guest users to the guest checkout page
+        return redirect()->route('Checkout.GuessCheckout');
+    }
+
     public function store(Request $request)
     {
         $request->validate([
@@ -26,12 +38,13 @@ class CheckoutController extends Controller
 
         // Retrieve the user's cart or guest cart using session ID
         $cart = Cart::where('user_id', $userId)->orWhere('session_id', session()->getId())->first();
-        $cartItems = CartItem::where('cart_id', $cart->id)->get();
+        if (!$cart) {
+            return response()->json(['error' => 'Cart not found.'], 400);
+        }
 
+        $cartItems = CartItem::where('cart_id', $cart->id)->get();
         if ($cartItems->isEmpty()) {
-            return Inertia::render('Checkout/GuestCheckout', [
-                'error' => 'Your cart is empty.',
-            ]);
+            return response()->json(['error' => 'Your cart is empty.'], 400);
         }
 
         DB::beginTransaction();
@@ -48,8 +61,8 @@ class CheckoutController extends Controller
                 'payment_status' => 'pending',
                 'shipping_address' => $request->shipping_address,
                 'billing_address' => $request->billing_address,
+                'stripe_session_id' => null, // Will be updated after Stripe session is created
             ]);
-
 
             // Create order items
             foreach ($cartItems as $cartItem) {
@@ -90,59 +103,57 @@ class CheckoutController extends Controller
                 'success_url' => route('checkout.success', ['session_id' => '{CHECKOUT_SESSION_ID}']),
                 'cancel_url' => route('checkout.cancel'),
             ]);
-//            echo '<pre>';
-//            var_dump($session);
-//            die();
+
+            // Update order with Stripe session ID
+            $order->update([
+                'stripe_session_id' => $session->id,
+            ]);
 
             DB::commit();
 
-            return response()->json([
-                'checkout_url' => $session->url,
-            ]);
-
+            return response()->json(['checkout_url' => $session->url]);
 
         } catch (\Exception $e) {
             DB::rollBack();
-
-            // Debugging the exception
-//            echo '<pre>';
-//            var_dump($e->getMessage());
-//            die();
-
-            // Log the error for better debugging
             \Log::error('Checkout Error: ' . $e->getMessage());
 
-            // Return an Inertia response with the error message
-            return Inertia::render('Checkout/GuestCheckout', [
-                'error' => 'Something went wrong during the checkout process. Please try again.',
-            ]);
+            return response()->json(['error' => 'Something went wrong during checkout.'], 500);
         }
-    }
-
-    public function startCheckout(Request $request)
-    {
-        // If the user is authenticated, you can redirect to the authenticated checkout page
-        if (Auth::check()) {
-            return redirect()->route('checkout.index');  // Ensure the route 'checkout.index' exists
-        }
-
-        // Redirect guest users to the guest checkout page
-        return redirect()->route('Checkout.GuessCheckout');
     }
 
     public function success(Request $request)
     {
-        // The user is redirected here after successful payment
+        $sessionId = $request->query('session_id');
+
+        Stripe::setApiKey(config('services.stripe.secret'));
+        $session = StripeSession::retrieve($sessionId);
+
+        // Find the order based on session ID (Stripe does not store this in your DB automatically)
+        $order = Order::where('user_id', auth()->id())->latest()->first(); // Get the latest order for the user
+
+        if (!$order) {
+            return redirect()->route('home')->with('error', 'Order not found.');
+        }
+
+        // Mark order as paid since Stripe redirects here after a successful payment
+        $order->update([
+            'status' => 'completed',
+            'payment_status' => 'paid',
+        ]);
+
         return Inertia::render('Checkout/Success', [
-            'message' => 'Your payment was successful!'
+            'order' => [
+                'id' => $order->id,
+                'total_amount' => $order->total_amount,
+            ],
         ]);
     }
 
     public function cancel()
     {
-        // The user is redirected here if they cancel the payment
         return Inertia::render('Checkout/Cancel', [
             'message' => 'Your payment was canceled.'
         ]);
     }
+
 }

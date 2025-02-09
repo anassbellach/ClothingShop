@@ -23,6 +23,7 @@ class Order extends Model
         'payment_status',
         'shipping_address',
         'billing_address',
+        'stripe_session_id'
     ];
 
     // Relationship with User

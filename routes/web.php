@@ -23,7 +23,7 @@ Route::post('/checkout/start', [CheckoutController::class, 'startCheckout'])->na
 Route::get('/guest-checkout', fn() => Inertia::render('Checkout/GuestCheckout'))->name('Checkout.GuessCheckout');
 
 // Allow both guests & logged-in users to submit checkout form
-Route::post('/checkout', [CheckoutController::class, 'store'])->name('checkout.store');
+Route::post('/checkout', [CheckoutController::class, 'store']);
 
 // Only logged-in users can access normal checkout page
 Route::middleware('auth')->get('/checkout', fn() => Inertia::render('Checkout'))->name('checkout.index');

@@ -36,6 +36,9 @@ class StripeController extends Controller
             'cancel_url'           => url('/checkout/cancel'),
         ]);
 
+        // 🔥 Ensure `stripe_session_id` is stored
+        $order->update(['stripe_session_id' => $session->id]);
+
         return response()->json(['url' => $session->url]);
     }
 
@@ -69,20 +72,19 @@ class StripeController extends Controller
             return response()->json(['error' => 'Invalid signature'], 400);
         }
 
-        // Handle the event
-        switch ($event->type) {
-            case 'checkout.session.completed':
-                $session = $event->data->object;
-                // Handle successful payment here, e.g., update order status
-                $order = Order::where('stripe_session_id', $session->id)->first();
-                if ($order) {
-                    $order->update(['payment_status' => 'paid']);
-                }
-                break;
-            // Handle other events here
-            default:
-                // Unexpected event type
-                return response()->json(['error' => 'Unhandled event'], 400);
+        // Handle checkout session completed event
+        if ($event->type === 'checkout.session.completed') {
+            $session = $event->data->object;
+
+            // Find the order with the Stripe session ID
+            $order = Order::where('stripe_session_id', $session->id)->first();
+
+            if ($order && $order->payment_status === 'pending') {
+                $order->update([
+                    'payment_status' => 'paid',
+                    'status' => 'processing', // Optional: Change status to processing
+                ]);
+            }
         }
 
         return response()->json(['status' => 'success']);

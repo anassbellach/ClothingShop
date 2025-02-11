@@ -40,30 +40,26 @@ const error = ref("");
 
 const submitCheckout = async () => {
     try {
-        const response = await axios.post("/checkout", form);
-        // Check if the response is HTML or JSON
-        if (response.headers['content-type'].includes('html')) {
-            console.error('Received HTML response instead of JSON:', response.data);
-            return;
-        }
+        console.log("Sending checkout data:", form);
 
-        // Process the JSON response
-        if (response.data.error) {
-            error.value = response.data.error;
-            return;
-        }
+        const response = await axios.post("/checkout", form, {
+            headers: {
+                "Content-Type": "application/json",
+                "Accept": "application/json",
+            }
+        });
 
-        console.log(response.data);
+        console.log("Response:", response.data);
 
         if (response.data.checkout_url) {
             window.location.href = response.data.checkout_url;
         } else {
             error.value = "Something went wrong. Please try again.";
         }
-    } catch (error) {
-        error.value = "Error processing checkout. Please try again.";
-        console.error(error);
+    } catch (err) {
+        console.error("Checkout error:", err.response ? err.response.data : err);
+        error.value = err.response?.data?.error || "Error processing checkout. Please try again.";
     }
-
 };
+
 </script>

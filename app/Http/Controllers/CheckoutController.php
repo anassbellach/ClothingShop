@@ -9,6 +9,7 @@ use App\Models\Cart;
 use App\Models\CartItem;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Stripe\Stripe;
 use Stripe\Checkout\Session as StripeSession;
 use Inertia\Inertia;
@@ -27,127 +28,131 @@ class CheckoutController extends Controller
         return redirect()->route('Checkout.GuessCheckout');
     }
 
-    public function store(Request $request)
-    {
-        $request->validate([
+public function store(Request $request)
+{
+    Log::info('Checkout request received', ['request' => $request->all()]);
+
+    try {
+        // Validate input
+        $validated = $request->validate([
             'shipping_address' => 'required|string',
             'billing_address' => 'required|string',
         ]);
 
-        $userId = auth()->check() ? auth()->id() : null; // Allow guests
+        Log::info('Validation successful', $validated);
 
-        // Retrieve the user's cart or guest cart using session ID
+        $userId = auth()->check() ? auth()->id() : null;
         $cart = Cart::where('user_id', $userId)->orWhere('session_id', session()->getId())->first();
+
         if (!$cart) {
+            Log::error('Cart not found for user or session', ['user_id' => $userId, 'session_id' => session()->getId()]);
             return response()->json(['error' => 'Cart not found.'], 400);
         }
 
-        $cartItems = CartItem::where('cart_id', $cart->id)->get();
+        $cartItems = $cart->items;
         if ($cartItems->isEmpty()) {
+            Log::error('Cart is empty');
             return response()->json(['error' => 'Your cart is empty.'], 400);
         }
 
         DB::beginTransaction();
-        try {
-            // Calculate the total amount
-            $totalAmount = $cartItems->sum(fn($item) => $item->product->price * $item->quantity);
 
-            // Create an order
-            $order = Order::create([
-                'user_id' => $userId,
-                'total_amount' => $totalAmount,
-                'status' => 'pending',
-                'payment_method' => 'stripe',
-                'payment_status' => 'pending',
-                'shipping_address' => $request->shipping_address,
-                'billing_address' => $request->billing_address,
-                'stripe_session_id' => null, // Will be updated after Stripe session is created
-            ]);
+        $totalAmount = $cartItems->sum(fn($item) => $item->product->price * $item->quantity);
+        Log::info('Total amount calculated', ['amount' => $totalAmount]);
 
-            // Create order items
-            foreach ($cartItems as $cartItem) {
-                OrderItem::create([
-                    'order_id' => $order->id,
-                    'product_id' => $cartItem->product_id,
-                    'quantity' => $cartItem->quantity,
-                    'price' => $cartItem->product->price,
-                ]);
+        $order = Order::create([
+            'user_id' => $userId,
+            'total_amount' => $totalAmount,
+            'status' => 'pending',
+            'payment_method' => 'stripe',
+            'payment_status' => 'pending',
+            'shipping_address' => $request->shipping_address,
+            'billing_address' => $request->billing_address,
+        ]);
 
-                // Decrease stock after placing the order
-                $cartItem->product->decrement('stock_quantity', $cartItem->quantity);
-            }
+        // Prepare Stripe checkout session
+        Stripe::setApiKey(config('services.stripe.secret'));
 
-            // Clear the cart items after the order is placed
-            CartItem::where('cart_id', $cart->id)->delete();
-
-            // Create a Stripe Checkout session
-            Stripe::setApiKey(config('services.stripe.secret'));
-
-            $lineItems = [];
-            foreach ($cartItems as $cartItem) {
-                $lineItems[] = [
-                    'price_data' => [
-                        'currency' => 'eur',
-                        'product_data' => ['name' => $cartItem->product->name],
-                        'unit_amount' => $cartItem->product->price * 100, // Stripe uses cents
-                    ],
-                    'quantity' => $cartItem->quantity,
-                ];
-            }
-
-            // Create Stripe session
-            $session = StripeSession::create([
-                'payment_method_types' => ['card'],
-                'line_items' => $lineItems,
-                'mode' => 'payment',
-                'success_url' => route('checkout.success', ['session_id' => '{CHECKOUT_SESSION_ID}']),
-                'cancel_url' => route('checkout.cancel'),
-            ]);
-
-            // Update order with Stripe session ID
-            $order->update([
-                'stripe_session_id' => $session->id,
-            ]);
-
-            DB::commit();
-
-            return response()->json(['checkout_url' => $session->url]);
-
-        } catch (\Exception $e) {
-            DB::rollBack();
-            \Log::error('Checkout Error: ' . $e->getMessage());
-
-            return response()->json(['error' => 'Something went wrong during checkout.'], 500);
+        $lineItems = [];
+        foreach ($cartItems as $cartItem) {
+            $lineItems[] = [
+                'price_data' => [
+                    'currency' => 'eur',
+                    'product_data' => ['name' => $cartItem->product->name],
+                    'unit_amount' => $cartItem->product->price * 100,
+                ],
+                'quantity' => $cartItem->quantity,
+            ];
         }
+
+        Log::info('Stripe line items prepared', $lineItems);
+
+        $session = StripeSession::create([
+            'payment_method_types' => ['card'],
+            'line_items' => $lineItems,
+            'mode' => 'payment',
+            'success_url' => route('checkout.success', ['session_id' => '{CHECKOUT_SESSION_ID}']),
+            'cancel_url' => route('checkout.cancel'),
+        ]);
+
+        Log::info('Stripe session created', ['session_id' => $session->id]);
+
+        $order->update(['stripe_session_id' => $session->id]);
+
+        DB::commit();
+
+        return response()->json(['checkout_url' => $session->url]);
+
+    } catch (\Exception $e) {
+        DB::rollBack();
+        Log::error('Checkout error', ['message' => $e->getMessage(), 'trace' => $e->getTraceAsString()]);
+        return response()->json(['error' => 'Something went wrong during checkout.'], 500);
     }
+}
+
 
     public function success(Request $request)
     {
         $sessionId = $request->query('session_id');
 
-        Stripe::setApiKey(config('services.stripe.secret'));
-        $session = StripeSession::retrieve($sessionId);
-
-        // Find the order based on session ID (Stripe does not store this in your DB automatically)
-        $order = Order::where('user_id', auth()->id())->latest()->first(); // Get the latest order for the user
-
-        if (!$order) {
-            return redirect()->route('home')->with('error', 'Order not found.');
+        if (!$sessionId) {
+            return redirect()->route('home')->with('error', 'Invalid session.');
         }
 
-        // Mark order as paid since Stripe redirects here after a successful payment
-        $order->update([
-            'status' => 'completed',
-            'payment_status' => 'paid',
-        ]);
+        Stripe::setApiKey(config('services.stripe.secret'));
 
-        return Inertia::render('Checkout/Success', [
-            'order' => [
-                'id' => $order->id,
-                'total_amount' => $order->total_amount,
-            ],
-        ]);
+        try {
+            // Retrieve session from Stripe
+            $session = StripeSession::retrieve($sessionId);
+
+            // Find the order using the stripe_session_id
+            $order = Order::where('stripe_session_id', $sessionId)->first();
+
+            if (!$order) {
+                Log::error('Order not found for Stripe session', ['session_id' => $sessionId]);
+                return redirect()->route('home')->with('error', 'Order not found.');
+            }
+
+            // Update order status to completed
+            $order->update([
+                'status' => 'completed',
+                'payment_status' => 'paid',
+            ]);
+
+            Log::info('Order marked as paid', ['order_id' => $order->id]);
+
+            return Inertia::render('Checkout/Success', [
+                'order' => [
+                    'id' => $order->id,
+                    'total_amount' => $order->total_amount,
+                ],
+            ]);
+        } catch (\Exception $e) {
+            Log::error('Stripe checkout success error', ['message' => $e->getMessage(), 'trace' => $e->getTraceAsString()]);
+            return redirect()->route('home')->with('error', 'Something went wrong while confirming the payment.');
+        }
     }
+
 
     public function cancel()
     {

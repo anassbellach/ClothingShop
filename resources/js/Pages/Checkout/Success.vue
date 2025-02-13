@@ -9,7 +9,7 @@
             <div v-if="order" class="bg-gray-50 p-4 rounded-lg border mb-4">
                 <p class="text-lg font-semibold">Order Details:</p>
                 <p><span class="font-medium">Order ID:</span> {{ order.id }}</p>
-                <p><span class="font-medium">Total Amount:</span> €{{ order.total_amount.toFixed(2) }}</p>
+                <p><span class="font-medium">Total Amount:</span> €{{ order.total_amount }}</p>
             </div>
 
             <Link href="/" class="bg-blue-600 hover:bg-blue-700 text-white font-semibold px-6 py-2 rounded-lg transition">

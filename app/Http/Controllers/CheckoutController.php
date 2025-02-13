@@ -91,9 +91,10 @@ public function store(Request $request)
             'payment_method_types' => ['card'],
             'line_items' => $lineItems,
             'mode' => 'payment',
-            'success_url' => route('checkout.success', ['session_id' => '{CHECKOUT_SESSION_ID}']),
+            'success_url' => route('checkout.success') . '?session_id={CHECKOUT_SESSION_ID}', // Fix
             'cancel_url' => route('checkout.cancel'),
         ]);
+
 
         Log::info('Stripe session created', ['session_id' => $session->id]);
 
@@ -113,33 +114,33 @@ public function store(Request $request)
 
     public function success(Request $request)
     {
-        $sessionId = $request->query('session_id');
+        $sessionId = $request->query('session_id'); // 🔥 Zorg dat dit een string is!
 
-        if (!$sessionId) {
+        if (!$sessionId || strlen($sessionId) > 66) {
+            \Log::error('Invalid session ID', ['session_id' => $sessionId]);
             return redirect()->route('home')->with('error', 'Invalid session.');
         }
 
         Stripe::setApiKey(config('services.stripe.secret'));
 
         try {
-            // Retrieve session from Stripe
-            $session = StripeSession::retrieve($sessionId);
-
-            // Find the order using the stripe_session_id
+            $session = StripeSession::retrieve($sessionId); // 🔥 Zorg dat dit correct werkt!
             $order = Order::where('stripe_session_id', $sessionId)->first();
 
             if (!$order) {
-                Log::error('Order not found for Stripe session', ['session_id' => $sessionId]);
+                \Log::error('Order not found for Stripe session', ['session_id' => $sessionId]);
                 return redirect()->route('home')->with('error', 'Order not found.');
             }
 
-            // Update order status to completed
+            if ($session->payment_status !== 'paid') {
+                \Log::error('Payment not completed', ['session_id' => $sessionId, 'status' => $session->payment_status]);
+                return redirect()->route('home')->with('error', 'Payment not completed.');
+            }
+
             $order->update([
                 'status' => 'completed',
                 'payment_status' => 'paid',
             ]);
-
-            Log::info('Order marked as paid', ['order_id' => $order->id]);
 
             return Inertia::render('Checkout/Success', [
                 'order' => [
@@ -148,11 +149,13 @@ public function store(Request $request)
                 ],
             ]);
         } catch (\Exception $e) {
-            Log::error('Stripe checkout success error', ['message' => $e->getMessage(), 'trace' => $e->getTraceAsString()]);
+            \Log::error('Stripe checkout success error', [
+                'message' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+            ]);
             return redirect()->route('home')->with('error', 'Something went wrong while confirming the payment.');
         }
     }
-
 
     public function cancel()
     {

@@ -32,7 +32,7 @@ class StripeController extends Controller
             'payment_method_types' => ['card'],
             'line_items'           => $lineItems,
             'mode'                 => 'payment',
-            'success_url'          => url('/checkout/success?session_id={CHECKOUT_SESSION_ID}'),
+            'success_url' => url('/checkout/success', ['session_id' => '{CHECKOUT_SESSION_ID}']),
             'cancel_url'           => url('/checkout/cancel'),
         ]);
 
@@ -58,35 +58,30 @@ class StripeController extends Controller
 
         $payload = $request->getContent();
         $sig_header = $request->header('Stripe-Signature');
-        $event = null;
+        $endpoint_secret = config('services.stripe.webhook_secret');
 
         try {
-            $event = Webhook::constructEvent(
-                $payload, $sig_header, config('services.stripe.webhook_secret')
-            );
-        } catch (\UnexpectedValueException $e) {
-            // Invalid payload
-            return response()->json(['error' => 'Invalid payload'], 400);
-        } catch (\Stripe\Exception\SignatureVerificationException $e) {
-            // Invalid signature
-            return response()->json(['error' => 'Invalid signature'], 400);
+            $event = \Stripe\Webhook::constructEvent($payload, $sig_header, $endpoint_secret);
+        } catch (\Exception $e) {
+            return response()->json(['error' => 'Webhook signature verification failed.'], 400);
         }
 
-        // Handle checkout session completed event
+        // Check if the event is checkout.session.completed
         if ($event->type === 'checkout.session.completed') {
             $session = $event->data->object;
 
-            // Find the order with the Stripe session ID
+            // Zoek de order op basis van de Stripe session_id
             $order = Order::where('stripe_session_id', $session->id)->first();
 
             if ($order && $order->payment_status === 'pending') {
                 $order->update([
                     'payment_status' => 'paid',
-                    'status' => 'processing', // Optional: Change status to processing
+                    'status' => 'completed',
                 ]);
             }
         }
 
         return response()->json(['status' => 'success']);
     }
+
 }

@@ -10,7 +10,7 @@ use Inertia\Inertia;
 // Home Page
 Route::get('/', function () {
     return Inertia::render('Home/Index');
-});
+})->name('home');
 
 // 🛒 Cart Routes
 Route::get('/cart', [CartController::class, 'index'])->name('cart.index');
@@ -32,9 +32,8 @@ Route::middleware('auth')->get('/checkout', fn() => Inertia::render('Checkout'))
 Route::post('/stripe/checkout', [StripeController::class, 'createCheckoutSession'])->name('stripe.checkout');
 Route::post('/stripe/webhook', [StripeController::class, 'handleStripeWebhook']);
 
-Route::get('/checkout/success', function () {
-    return Inertia::render('Checkout/Success');
-})->name('checkout.success');
+Route::get('/checkout/success', [CheckoutController::class, 'success'])->name('checkout.success');
+
 
 Route::get('/checkout/cancel', function () {
     return Inertia::render('Checkout/Cancel'); // You can create a Vue page for the cancel

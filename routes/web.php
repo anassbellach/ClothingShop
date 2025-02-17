@@ -1,8 +1,10 @@
 <?php
 
+use App\Http\Controllers\AuthController;
 use App\Http\Controllers\CartController;
 use App\Http\Controllers\CheckoutController;
 use App\Http\Controllers\ProductController;
+use App\Http\Controllers\RegisterController;
 use App\Http\Controllers\StripeController;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
@@ -11,6 +13,13 @@ use Inertia\Inertia;
 Route::get('/', function () {
     return Inertia::render('Home/Index');
 })->name('home');
+
+Route::get('login', [AuthController::class, 'loginPage'])->name('login');
+Route::post('login', [AuthController::class, 'store'])->name('login.store');
+Route::post('logout', [AuthController::class, 'destroy'])->name('logout');
+Route::get('register', [RegisterController::class, 'create'])->name('register');
+Route::post('register', [RegisterController::class, 'store'])->name('register.store');
+
 
 // 🛒 Cart Routes
 Route::get('/cart', [CartController::class, 'index'])->name('cart.index');

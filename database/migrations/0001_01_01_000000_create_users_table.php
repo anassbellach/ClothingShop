@@ -13,19 +13,17 @@ return new class extends Migration
     {
         Schema::create('users', function (Blueprint $table) {
             $table->id();
-            $table->string('name');
+            $table->string('firstname');
+            $table->string('lastname');
             $table->string('email')->unique();
-            $table->timestamp('email_verified_at')->nullable();
+            $table->string('email_verified_at')->nullable();
             $table->string('password');
             $table->rememberToken();
+            $table->boolean('user_activated')->default(0);
+            $table->enum('role', ['admin', 'customer'])->default('customer');
             $table->unsignedBigInteger('created_at');
             $table->unsignedBigInteger('updated_at');
-        });
-
-        Schema::create('password_reset_tokens', function (Blueprint $table) {
-            $table->string('email')->primary();
-            $table->string('token');
-            $table->unsignedBigInteger('created_at')->nullable(); // Store Unix timestamp
+            $table->unsignedBigInteger('deleted_at');
         });
 
         Schema::create('sessions', function (Blueprint $table) {
@@ -44,7 +42,5 @@ return new class extends Migration
     public function down(): void
     {
         Schema::dropIfExists('users');
-        Schema::dropIfExists('password_reset_tokens');
-        Schema::dropIfExists('sessions');
     }
 };
